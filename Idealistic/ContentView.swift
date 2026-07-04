@@ -170,7 +170,7 @@ struct ContentView: View {
             Color.black.ignoresSafeArea()
             
             if isPreview {
-                Text("Το WKWebView δεν υποστηρίζεται στο Preview.\nΠάτα Cmd + R για τον Simulator.")
+                Text("WKWebView is not supported in Preview.\nPress Cmd + R for the Simulator.")
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
             } else {
@@ -193,14 +193,14 @@ struct ContentView: View {
                 
                 if showError {
                     VStack(spacing: 20) {
-                        Text("Σφάλμα φόρτωσης. Ελέγξτε τη σύνδεσή σας.")
+                        Text("Loading error. Please check your connection.")
                             .foregroundColor(.white)
                             .font(.body)
                         
                         Button(action: {
                             triggerRefresh = true
                         }) {
-                            Text("Δοκιμάστε ξανά")
+                            Text("Try again")
                                 .foregroundColor(.white)
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 24)
