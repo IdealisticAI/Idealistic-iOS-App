@@ -251,9 +251,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = TZ5CVLNR5K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can take photos.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We need access to the microphone for audio features.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photos so you can upload images.";
@@ -287,9 +288,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = TZ5CVLNR5K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can take photos.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We need access to the microphone for audio features.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "We need access to your photos so you can upload images.";
