@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "LampSquareTransparent.png",
+      "filename" : "LampSquare.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "LampSquareTransparent 1.png",
+      "filename" : "LampSquare 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "LampSquareTransparent 2.png",
+      "filename" : "LampSquare 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
