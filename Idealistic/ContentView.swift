@@ -14,6 +14,7 @@ struct CustomWebView: UIViewRepresentable {
     @Binding var showError: Bool
     @Binding var activeExternalURL: IdentifiableURL?
     @Binding var triggerRefresh: Bool
+    @Binding var loadTargetURL: URL?
     
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -39,10 +40,19 @@ struct CustomWebView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
+        if let targetURL = loadTargetURL {
+            DispatchQueue.main.async {
+                let request = URLRequest(url: targetURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
+                uiView.load(request)
+                self.loadTargetURL = nil
+            }
+        }
+        
         if triggerRefresh {
             DispatchQueue.main.async {
                 if showError {
-                    let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
+                    let currentURLToLoad = uiView.url ?? url
+                    let request = URLRequest(url: currentURLToLoad, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
                     uiView.load(request)
                 } else {
                     uiView.reload()
@@ -67,7 +77,8 @@ struct CustomWebView: UIViewRepresentable {
         
         @objc func handleRefresh(_ sender: UIRefreshControl) {
             if parent.showError {
-                let request = URLRequest(url: parent.url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
+                let currentURLToLoad = webView?.url ?? parent.url
+                let request = URLRequest(url: currentURLToLoad, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
                 webView?.load(request)
             } else {
                 webView?.reload()
@@ -158,6 +169,7 @@ struct ContentView: View {
     @State private var showError = false
     @State private var activeExternalURL: IdentifiableURL? = nil
     @State private var triggerRefresh = false
+    @State private var loadTargetURL: URL? = nil
     
     let baseURL = URL(string: "https://www.idealistic.ai")!
     
@@ -180,7 +192,8 @@ struct ContentView: View {
                         isLoading: $isLoading,
                         showError: $showError,
                         activeExternalURL: $activeExternalURL,
-                        triggerRefresh: $triggerRefresh
+                        triggerRefresh: $triggerRefresh,
+                        loadTargetURL: $loadTargetURL
                     )
                     .ignoresSafeArea(.all, edges: .bottom)
                 }
@@ -217,6 +230,15 @@ struct ContentView: View {
         .sheet(item: $activeExternalURL) { identifiable in
             SafariView(url: identifiable.url)
                 .ignoresSafeArea()
+        }
+        .onOpenURL { incomingURL in
+            if incomingURL.scheme?.lowercased() == "idealistic",
+               let components = URLComponents(url: incomingURL, resolvingAgainstBaseURL: false),
+               let targetUrlString = components.queryItems?.first(where: { $0.name == "url" })?.value,
+               let targetURL = URL(string: targetUrlString) {
+                
+                loadTargetURL = targetURL
+            }
         }
     }
 }

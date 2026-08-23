@@ -10,9 +10,22 @@
 		5BC91D1B2FF9515A00718BCC /* Idealistic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Idealistic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5B8D0963303B70C10001023A /* Exceptions for "Idealistic" folder in "Idealistic" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5BC91D1A2FF9515A00718BCC /* Idealistic */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5BC91D1D2FF9515A00718BCC /* Idealistic */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5B8D0963303B70C10001023A /* Exceptions for "Idealistic" folder in "Idealistic" target */,
+			);
 			path = Idealistic;
 			sourceTree = "<group>";
 		};
@@ -254,6 +267,7 @@
 				DEVELOPMENT_TEAM = HNXW88Y5RG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Idealistic/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Idealistic;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can take photos.";
@@ -293,6 +307,7 @@
 				DEVELOPMENT_TEAM = HNXW88Y5RG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Idealistic/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Idealistic;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can take photos.";
