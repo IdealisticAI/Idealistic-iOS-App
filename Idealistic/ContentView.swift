@@ -20,9 +20,13 @@ struct CustomWebView: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
+        
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
-        webView.uiDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator // Handles alerts, confirms, and window.open
         webView.backgroundColor = .black
         webView.isOpaque = false
         webView.allowsBackForwardNavigationGestures = true
@@ -43,14 +47,12 @@ struct CustomWebView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        // If a new URL comes in (like a Deep Link), load it immediately
         if url != context.coordinator.lastLoadedURL {
             context.coordinator.lastLoadedURL = url
             let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15)
             uiView.load(request)
         }
         
-        // If the user taps "Try again"
         if triggerRefresh {
             DispatchQueue.main.async {
                 self.triggerRefresh = false
@@ -85,6 +87,8 @@ struct CustomWebView: UIViewRepresentable {
             }
         }
         
+        // MARK: - Navigation Delegate
+        
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             parent.isLoading = true
             parent.showError = false
@@ -106,8 +110,6 @@ struct CustomWebView: UIViewRepresentable {
         
         private func handleError(_ error: Error) {
             let nsError = error as NSError
-            
-            // Silently ignore navigation cancellations (-999) and interruptions (102)
             if nsError.code == NSURLErrorCancelled || nsError.code == 102 {
                 return
             }
@@ -126,6 +128,11 @@ struct CustomWebView: UIViewRepresentable {
             
             let urlString = url.absoluteString
             
+            if urlString.contains("#") || url.scheme?.lowercased() == "javascript" || url.scheme?.lowercased() == "about" {
+                decisionHandler(.allow)
+                return
+            }
+            
             if urlString.contains("action=external_checkout") {
                 let cleanUrlString = urlString.replacingOccurrences(of: "?action=external_checkout", with: "")
                 if let cleanUrl = URL(string: cleanUrlString) {
@@ -135,20 +142,32 @@ struct CustomWebView: UIViewRepresentable {
                 return
             }
             
-            if let scheme = url.scheme?.lowercased(), scheme != "http" && scheme != "https" {
-                UIApplication.shared.open(url)
-                decisionHandler(.cancel)
+            if let host = url.host, host.hasSuffix(allowedDomain) {
+                decisionHandler(.allow)
                 return
             }
             
-            if let host = url.host, host.hasSuffix(allowedDomain) {
-                decisionHandler(.allow)
-            } else {
+            if ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                 DispatchQueue.main.async {
                     self.parent.activeExternalURL = IdentifiableURL(url: url)
                 }
                 decisionHandler(.cancel)
+                return
             }
+            
+            UIApplication.shared.open(url)
+            decisionHandler(.cancel)
+        }
+        
+        // MARK: - UI Delegate (Handles window.open, media, and JS Prompts)
+        
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = navigationAction.request.url {
+                DispatchQueue.main.async {
+                    self.parent.activeExternalURL = IdentifiableURL(url: url)
+                }
+            }
+            return nil
         }
         
         func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
@@ -169,6 +188,57 @@ struct CustomWebView: UIViewRepresentable {
             } else {
                 decisionHandler(.prompt)
             }
+        }
+
+        // MARK: - JavaScript Alerts & Confirms Fix
+        
+        // Helper to get the active view controller to present the alert
+        private var topViewController: UIViewController? {
+            guard let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                  let rootViewController = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+                return nil
+            }
+            var topController = rootViewController
+            while let presented = topController.presentedViewController {
+                topController = presented
+            }
+            return topController
+        }
+
+        // Handles javascript: alert()
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+                completionHandler()
+            }))
+            topViewController?.present(alert, animated: true)
+        }
+
+        // Handles javascript: confirm() -> This fixes the Sign Out & Delete History buttons!
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+            let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
+                completionHandler(false)
+            }))
+            alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+                completionHandler(true)
+            }))
+            topViewController?.present(alert, animated: true)
+        }
+
+        // Handles javascript: prompt()
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+            let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+            alert.addTextField { textField in
+                textField.text = defaultText
+            }
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
+                completionHandler(nil)
+            }))
+            alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+                completionHandler(alert.textFields?.first?.text)
+            }))
+            topViewController?.present(alert, animated: true)
         }
     }
 }
@@ -204,7 +274,6 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
             } else {
                 
-                // WebView is now ALWAYS alive in the background, preventing rebuilds
                 CustomWebView(
                     url: currentURL,
                     isLoading: $isLoading,
@@ -214,7 +283,7 @@ struct ContentView: View {
                     triggerRefresh: $triggerRefresh
                 )
                 .ignoresSafeArea(.all, edges: .bottom)
-                .opacity(showError ? 0 : 1) // Hides the webview if there's an error, but keeps it active
+                .opacity(showError ? 0 : 1)
                 
                 if isLoading && !showError {
                     ProgressView()
@@ -228,7 +297,6 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .font(.headline)
                         
-                        // Diagnostic text to show exactly what broke
                         Text(errorMessage)
                             .foregroundColor(.gray)
                             .font(.caption)
@@ -261,7 +329,6 @@ struct ContentView: View {
                let components = URLComponents(url: incomingURL, resolvingAgainstBaseURL: false),
                var targetUrlString = components.queryItems?.first(where: { $0.name == "url" })?.value {
                 
-                // FORCE HTTPS: Fix for ATS Error -1022
                 if targetUrlString.lowercased().hasPrefix("http://") {
                     targetUrlString = "https://" + targetUrlString.dropFirst(7)
                 } else if !targetUrlString.lowercased().hasPrefix("https://") {
@@ -269,7 +336,6 @@ struct ContentView: View {
                 }
                 
                 if let targetURL = URL(string: targetUrlString) {
-                    // 0.8s delay ensures the iOS Networking Daemon is fully awake before requesting
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         showError = false
                         currentURL = targetURL
