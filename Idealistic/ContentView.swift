@@ -9,12 +9,12 @@ struct IdentifiableURL: Identifiable {
 }
 
 struct CustomWebView: UIViewRepresentable {
-    let url: URL
+    var url: URL
     @Binding var isLoading: Bool
     @Binding var showError: Bool
+    @Binding var errorMessage: String
     @Binding var activeExternalURL: IdentifiableURL?
     @Binding var triggerRefresh: Bool
-    @Binding var loadTargetURL: URL?
     
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -32,32 +32,33 @@ struct CustomWebView: UIViewRepresentable {
         refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefresh), for: .valueChanged)
         webView.scrollView.refreshControl = refreshControl
         
-        let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
+        context.coordinator.webView = webView
+        
+        // Initial Load
+        context.coordinator.lastLoadedURL = url
+        let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15)
         webView.load(request)
         
-        context.coordinator.webView = webView
         return webView
     }
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        if let targetURL = loadTargetURL {
-            DispatchQueue.main.async {
-                let request = URLRequest(url: targetURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
-                uiView.load(request)
-                self.loadTargetURL = nil
-            }
+        // If a new URL comes in (like a Deep Link), load it immediately
+        if url != context.coordinator.lastLoadedURL {
+            context.coordinator.lastLoadedURL = url
+            let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15)
+            uiView.load(request)
         }
         
+        // If the user taps "Try again"
         if triggerRefresh {
             DispatchQueue.main.async {
-                if showError {
-                    let currentURLToLoad = uiView.url ?? url
-                    let request = URLRequest(url: currentURLToLoad, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
-                    uiView.load(request)
-                } else {
-                    uiView.reload()
-                }
-                triggerRefresh = false
+                self.triggerRefresh = false
+                self.showError = false
+                
+                let currentURLToLoad = uiView.url ?? self.url
+                let request = URLRequest(url: currentURLToLoad, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+                uiView.load(request)
             }
         }
     }
@@ -69,6 +70,7 @@ struct CustomWebView: UIViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: CustomWebView
         weak var webView: WKWebView?
+        var lastLoadedURL: URL?
         let allowedDomain = "idealistic.ai"
         
         init(_ parent: CustomWebView) {
@@ -76,12 +78,10 @@ struct CustomWebView: UIViewRepresentable {
         }
         
         @objc func handleRefresh(_ sender: UIRefreshControl) {
-            if parent.showError {
-                let currentURLToLoad = webView?.url ?? parent.url
-                let request = URLRequest(url: currentURLToLoad, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10)
+            parent.showError = false
+            if let currentURLToLoad = webView?.url ?? parent.url as URL? {
+                let request = URLRequest(url: currentURLToLoad, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
                 webView?.load(request)
-            } else {
-                webView?.reload()
             }
         }
         
@@ -92,13 +92,30 @@ struct CustomWebView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             parent.isLoading = false
+            parent.showError = false
             webView.scrollView.refreshControl?.endRefreshing()
         }
         
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            handleError(error)
+        }
+        
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            handleError(error)
+        }
+        
+        private func handleError(_ error: Error) {
+            let nsError = error as NSError
+            
+            // Silently ignore navigation cancellations (-999) and interruptions (102)
+            if nsError.code == NSURLErrorCancelled || nsError.code == 102 {
+                return
+            }
+            
             parent.isLoading = false
             parent.showError = true
-            webView.scrollView.refreshControl?.endRefreshing()
+            parent.errorMessage = "Error \(nsError.code): \(nsError.localizedDescription)"
+            webView?.scrollView.refreshControl?.endRefreshing()
         }
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -167,11 +184,11 @@ struct SafariView: UIViewControllerRepresentable {
 struct ContentView: View {
     @State private var isLoading = true
     @State private var showError = false
+    @State private var errorMessage = ""
     @State private var activeExternalURL: IdentifiableURL? = nil
     @State private var triggerRefresh = false
-    @State private var loadTargetURL: URL? = nil
     
-    let baseURL = URL(string: "https://www.idealistic.ai")!
+    @State private var currentURL = URL(string: "https://www.idealistic.ai")!
     
     var isPreview: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -186,19 +203,20 @@ struct ContentView: View {
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
             } else {
-                if !showError {
-                    CustomWebView(
-                        url: baseURL,
-                        isLoading: $isLoading,
-                        showError: $showError,
-                        activeExternalURL: $activeExternalURL,
-                        triggerRefresh: $triggerRefresh,
-                        loadTargetURL: $loadTargetURL
-                    )
-                    .ignoresSafeArea(.all, edges: .bottom)
-                }
                 
-                if isLoading {
+                // WebView is now ALWAYS alive in the background, preventing rebuilds
+                CustomWebView(
+                    url: currentURL,
+                    isLoading: $isLoading,
+                    showError: $showError,
+                    errorMessage: $errorMessage,
+                    activeExternalURL: $activeExternalURL,
+                    triggerRefresh: $triggerRefresh
+                )
+                .ignoresSafeArea(.all, edges: .bottom)
+                .opacity(showError ? 0 : 1) // Hides the webview if there's an error, but keeps it active
+                
+                if isLoading && !showError {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(1.5)
@@ -208,7 +226,14 @@ struct ContentView: View {
                     VStack(spacing: 20) {
                         Text("Loading error. Please check your connection.")
                             .foregroundColor(.white)
-                            .font(.body)
+                            .font(.headline)
+                        
+                        // Diagnostic text to show exactly what broke
+                        Text(errorMessage)
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 30)
                         
                         Button(action: {
                             triggerRefresh = true
@@ -234,10 +259,22 @@ struct ContentView: View {
         .onOpenURL { incomingURL in
             if incomingURL.scheme?.lowercased() == "idealistic",
                let components = URLComponents(url: incomingURL, resolvingAgainstBaseURL: false),
-               let targetUrlString = components.queryItems?.first(where: { $0.name == "url" })?.value,
-               let targetURL = URL(string: targetUrlString) {
+               var targetUrlString = components.queryItems?.first(where: { $0.name == "url" })?.value {
                 
-                loadTargetURL = targetURL
+                // FORCE HTTPS: Fix for ATS Error -1022
+                if targetUrlString.lowercased().hasPrefix("http://") {
+                    targetUrlString = "https://" + targetUrlString.dropFirst(7)
+                } else if !targetUrlString.lowercased().hasPrefix("https://") {
+                    targetUrlString = "https://" + targetUrlString
+                }
+                
+                if let targetURL = URL(string: targetUrlString) {
+                    // 0.8s delay ensures the iOS Networking Daemon is fully awake before requesting
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        showError = false
+                        currentURL = targetURL
+                    }
+                }
             }
         }
     }
