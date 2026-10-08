@@ -3,6 +3,15 @@ import WebKit
 import SafariServices
 import AVFoundation
 
+// The only places the app is allowed to open inside its own web view: https pages of idealistic.ai or its subdomains.
+// A plain "hasSuffix" check is not enough, it would also accept hosts such as "evilidealistic.ai", and http must never be trusted.
+func isTrustedIdealisticURL(_ url: URL) -> Bool {
+    guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else {
+        return false
+    }
+    return host == "idealistic.ai" || host.hasSuffix(".idealistic.ai")
+}
+
 struct IdentifiableURL: Identifiable {
     let id = UUID()
     let url: URL
@@ -128,12 +137,12 @@ struct CustomWebView: UIViewRepresentable {
             
             let urlString = url.absoluteString
             
-            if urlString.contains("#") || url.scheme?.lowercased() == "javascript" || url.scheme?.lowercased() == "about" {
+            if url.scheme?.lowercased() == "javascript" || url.scheme?.lowercased() == "about" {
                 decisionHandler(.allow)
                 return
             }
             
-            if urlString.contains("action=external_checkout") {
+            if urlString.contains("action=external_checkout"), url.scheme?.lowercased() == "https" {
                 let cleanUrlString = urlString.replacingOccurrences(of: "?action=external_checkout", with: "")
                 if let cleanUrl = URL(string: cleanUrlString) {
                     UIApplication.shared.open(cleanUrl)
@@ -142,7 +151,7 @@ struct CustomWebView: UIViewRepresentable {
                 return
             }
             
-            if let host = url.host, host.hasSuffix(allowedDomain) {
+            if isTrustedIdealisticURL(url) {
                 decisionHandler(.allow)
                 return
             }
@@ -335,7 +344,7 @@ struct ContentView: View {
                     targetUrlString = "https://" + targetUrlString
                 }
                 
-                if let targetURL = URL(string: targetUrlString) {
+                if let targetURL = URL(string: targetUrlString), isTrustedIdealisticURL(targetURL) {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         showError = false
                         currentURL = targetURL
