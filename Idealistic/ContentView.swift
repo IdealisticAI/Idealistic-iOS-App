@@ -3,8 +3,6 @@ import WebKit
 import SafariServices
 import AVFoundation
 
-// The only places the app is allowed to open inside its own web view: https pages of idealistic.ai or its subdomains.
-// A plain "hasSuffix" check is not enough, it would also accept hosts such as "evilidealistic.ai", and http must never be trusted.
 func isTrustedIdealisticURL(_ url: URL) -> Bool {
     guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else {
         return false
